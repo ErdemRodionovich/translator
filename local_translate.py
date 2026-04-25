@@ -3,6 +3,7 @@ import requests
 import json
 import time
 from tqdm import tqdm # Using tqdm for a nice progress bar (install with pip install tqdm)
+import argparse
 
 # ========================================================
 # --- CONFIGURATION SECTION ---
@@ -12,9 +13,6 @@ from tqdm import tqdm # Using tqdm for a nice progress bar (install with pip ins
 # The URL and port where your local model server is running 
 LOCAL_API_URL = "http://localhost:1234/v1/chat/completions" 
 MODEL_NAME = "mistralai/ministral-3-14b-reasoning" # Optional, but good practice for the request body
-
-# Input file path (the CSV you want to process)
-INPUT_FILE = "translation.csv" 
 
 TARGET_LANGUAGES = {
     'ru': "Русский",
@@ -38,9 +36,6 @@ TARGET_LANGUAGES = {
 
 # The column name in your CSV that contains the text needing translation
 SOURCE_COLUMN = "keys" 
-
-# The file where the results will be saved
-OUTPUT_FILE = "translated_output_local.csv" 
 
 # System Prompt: Guides the model's behavior (CRITICAL for good quality)
 SYSTEM_PROMPT = "You are a professional and highly accurate translator. Your only task is to translate the provided text into the target language. Do not add any commentary, introductions, or extra formatting. Don't touch parameters in curle braces, for example {m}. If you see phrases with verbs, then it is for button, keep the verb tense as for action to do, for example, 'Buy moves' translated to Русский as 'Купить ходы'. If the source text is empty or only contains whitespace, return an empty string. Be kind and respectful, for example 'You have moves' is translated into Русский as 'Вы имеете ходы'. Keep length of phrase the same or shorter, longer at most by 10%. If phrase is in all caps, such as 'CONGRATS!, translate it in all caps as well, for example 'CONGRATS!' is translated into Русский as 'ПОЗДРАВЛЯЕМ!'."
@@ -92,16 +87,16 @@ def enhance_keys_of_phrases(text: str) -> str:
     system_prompt = "You are a helpful assistant that improves the tone of phrases, making them more kind, respectful, and human. Phrases are done by russian speaking developer, there can be slang, like 'Buy moves via AD', this can be improved as 'Buy moves by watching advertisement'. Your task is to take the provided text and enhance it while preserving its original meaning. Do not add any commentary or extra formatting. Don't change the meaning of the phrase. Don't change parameters in curle braces, for example {m}. If the source text is empty or only contains whitespace, return an empty string. Keep length of phrase the same or shorter, longer at most by 10%."
     return call_llm(prompt, system_prompt)
 
-def process_csv_translation():
+def process_csv_translation(input_file: str, output_file: str):
     """Main function to read CSV, translate column by column, and save results."""
     print("===============================================")
     print("=== STARTING LOCAL LLM TRANSLATION PROCESS ===")
     print("===============================================")
 
     try:
-        df = pd.read_csv(INPUT_FILE)
+        df = pd.read_csv(input_file)
     except FileNotFoundError:
-        print(f"\n!!! ERROR: Input file '{INPUT_FILE}' not found. Please check the path.")
+        print(f"\n!!! ERROR: Input file '{input_file}' not found. Please check the path.")
         return
     
     en_column = 'en'
@@ -142,15 +137,30 @@ def process_csv_translation():
         print(f"\n✅ Finished translations for {lang_code.upper()}.")
 
     try:
-        df.to_csv(OUTPUT_FILE, index=False, encoding='utf-8')
+        df.to_csv(output_file, index=False, encoding='utf-8')
         print("\n===============================================")
-        print(f"✨ SUCCESS! All translations saved to '{OUTPUT_FILE}'")
+        print(f"✨ SUCCESS! All translations saved to '{output_file}'")
         print(f"Don't forget to translate to Buryad by hand.")
         print("===============================================")
     except Exception as e:
         print(f"\n!!! FATAL ERROR during saving: {e}")
 
+def main():
+    parser = argparse.ArgumentParser(description='Translate text from a CSV file using a local LLM model.')
+
+    parser.add_argument('-i', '--input', 
+                        type=str, 
+                        default='translation.csv',
+                        help='Path to the input CSV file containing text to translate')
+    parser.add_argument('-o', '--output', 
+                        type=str, 
+                        default='translated_output.csv',
+                        help='Path where the translated output CSV will be saved')
+
+    args = parser.parse_args()
+
+    process_csv_translation(args.input, args.output)
 
 if __name__ == "__main__":
-    process_csv_translation()
+    main()
 
