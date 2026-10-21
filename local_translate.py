@@ -12,9 +12,10 @@ import argparse
 
 # The URL and port where your local model server is running 
 LOCAL_API_URL = "http://localhost:1234/v1/chat/completions" 
-MODEL_NAME = "mistralai/ministral-3-14b-reasoning" # Optional, but good practice for the request body
+MODEL_NAME = "qwen/qwen3.5-9b" # "mistralai/ministral-3-14b-reasoning" # Optional, but good practice for the request body
 
 TARGET_LANGUAGES = {
+    'nl': "Nederlands",
     'ru': "Русский",
     'es': "Español",
     'fr': "Français",
@@ -31,7 +32,42 @@ TARGET_LANGUAGES = {
     'th': "ภาษาไทย",
     'tr': "Türkçe",
     'vi': "Tiếng Việt",
-    'cmn': "普通话"
+    'cmn': "普通话",
+    'sv': "Svenska",
+    'da': "Dansk",
+    'fi': "Suomi",
+    'cs': "Čeština",
+    'hu': "Magyar",
+    'ro': "Română",
+    'el': "Ελληνικά",
+    'he': "עברית",
+    'ms': "Bahasa Melayu",
+    'no': "Norsk",
+    'uk': "Українська",
+    'ca': "Català",
+    'lt': "Lietuvių",
+    'lv': "Latviešu",
+    'sk': "Slovenčina",
+    'sl': "Slovenščina",
+    'et': "Eesti",
+    'hr': "Hrvatski",
+    'sr': "Српски",
+    'mk': "Македонски",
+    'mt': "Malti",
+    'sq': "Shqip",
+    'hy': "Հայերեն",
+    'af': "Afrikaans",
+    'sw': "Kiswahili",
+    'fil': "Filipino",
+    'fa': "فارسی",
+    'ml': "മലയാളം",
+    'bxr': "Буряад",
+    'mn': "Монгол",
+    'sah': "Саха",
+    'evn': "Эвэн",
+    'kjh': "Хакас",
+    'tyv': "Тыва",
+    'yrk': "Ненц"
 }
 
 # The column name in your CSV that contains the text needing translation
@@ -39,7 +75,6 @@ SOURCE_COLUMN = "keys"
 
 # System Prompt: Guides the model's behavior (CRITICAL for good quality)
 SYSTEM_PROMPT = "You are a professional and highly accurate translator. Your only task is to translate the provided text into the target language. Do not add any commentary, introductions, or extra formatting. Don't touch parameters in curle braces, for example {m}. If you see phrases with verbs, then it is for button, keep the verb tense as for action to do, for example, 'Buy moves' translated to Русский as 'Купить ходы'. If the source text is empty or only contains whitespace, return an empty string. Be kind and respectful, for example 'You have moves' is translated into Русский as 'Вы имеете ходы'. Keep length of phrase the same or shorter, longer at most by 10%. If phrase is in all caps, such as 'CONGRATS!, translate it in all caps as well, for example 'CONGRATS!' is translated into Русский as 'ПОЗДРАВЛЯЕМ!'."
-
 def call_llm(prompt: str, system_promts: str) -> str:
     payload = {
         "model": MODEL_NAME,
@@ -71,7 +106,6 @@ def call_llm(prompt: str, system_promts: str) -> str:
         print(f"\n[!!! REQUEST ERROR !!!] An error occurred communicating with the API: {e}")
         return f"[REQUEST ERROR: {type(e).__name__}]"
 
-
 def translate_text_via_local_model(text: str, target_language_code: str) -> str:
     if pd.isna(text) or str(text).strip() == "":
         return ""
@@ -86,6 +120,10 @@ def enhance_keys_of_phrases(text: str) -> str:
               f"Source Text: '{text}'")
     system_prompt = "You are a helpful assistant that improves the tone of phrases, making them more kind, respectful, and human. Phrases are done by russian speaking developer, there can be slang, like 'Buy moves via AD', this can be improved as 'Buy moves by watching advertisement'. Your task is to take the provided text and enhance it while preserving its original meaning. Do not add any commentary or extra formatting. Don't change the meaning of the phrase. Don't change parameters in curle braces, for example {m}. If the source text is empty or only contains whitespace, return an empty string. Keep length of phrase the same or shorter, longer at most by 10%."
     return call_llm(prompt, system_prompt)
+
+def is_uppercase_ignore_non_alpha(s):
+    alpha_chars = [c for c in s if c.isalpha()]
+    return len(alpha_chars) > 0 and all(c.isupper() for c in alpha_chars)
 
 def process_csv_translation(input_file: str, output_file: str):
     """Main function to read CSV, translate column by column, and save results."""
@@ -117,13 +155,19 @@ def process_csv_translation(input_file: str, output_file: str):
         print(f"\n\n[ STARTING TRANSLATIONS FOR LANGUAGE: {lang_code.upper()} ]")
         new_column_name = f"{lang_code}"
         if not new_column_name in df.columns:
-            df[new_column_name] = []
+            df[new_column_name] = [''] * len(df)
 
         i = 0
         for original_text in df[en_column]:
             i += 1
-            # Call the translation function
-            translation = translate_text_via_local_model(original_text, TARGET_LANGUAGES[lang_code])
+            if original_text == 'English':
+                translation = TARGET_LANGUAGES[lang_code]
+            else:
+                translation = translate_text_via_local_model(original_text, TARGET_LANGUAGES[lang_code])
+            
+            if is_uppercase_ignore_non_alpha(original_text):
+                translation = translation.upper()
+
             if translation == "[CONNECTION FAILED]" or translation.startswith("[REQUEST ERROR"):
                 print(f"\n!!! Stopping translation for '{original_text}' due to API issues.")
                 return
